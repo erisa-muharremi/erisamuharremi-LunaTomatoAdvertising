@@ -96,7 +96,94 @@ def greedy(max_crafts=600, cands=300):
     return crafts, counts, total
 
 
-# ---------- prova e pjesës 2 ----------
+# ---------- pjesa 3: simulated annealing ----------
+def anneal(crafts, counts, total, seconds, temp0=1.0, temp1=0.03):
+    """Provon ndryshime te vogla dhe mban ato qe permiresojne zgjidhjen."""
+    mse = mse_of(total)
+    cur = energy(len(crafts), mse)
+    best_n, best = (len(crafts), [c[:3] for c in crafts]) if mse <= FEAS else (10**9, None)
+    t_start, it = time.time(), 0
+
+    while True:
+        el = time.time() - t_start
+        if el > seconds:
+            break
+        temp = temp0 * (temp1 / temp0) ** (el / seconds)
+        it += 1
+        r = rng.random()
+        removed, added = None, None   # removed = indeksi, added = anije e re
+
+        if r < 0.45 and crafts:            # leviz pak fazen
+            k = int(rng.integers(len(crafts)))
+            fam, i, ph, _ = crafts[k]
+            period = 1.0 / FREQ[fam][i]
+            ph2 = (ph + TWO_PI * rng.normal(0, 3) * DT_ND / period) % TWO_PI
+            removed, added = k, [fam, i, ph2, craft_signal(fam, i, ph2)]
+        elif r < 0.75 and crafts:          # zhvendose ne nje orbite tjeter
+            k = int(rng.integers(len(crafts)))
+            c = crafts[k]
+            counts[FAM_OFF[c[0]] + c[1]] -= 1
+            added = new_craft(counts, total - c[3])
+            counts[FAM_OFF[c[0]] + c[1]] += 1
+            removed = k
+        elif r < 0.90 and crafts:          # hiq nje anije
+            removed = int(rng.integers(len(crafts)))
+        else:                              # shto nje anije
+            added = new_craft(counts, total)
+
+        new_total = total.copy()
+        if removed is not None:
+            new_total -= crafts[removed][3]
+        if added is not None:
+            new_total += added[3]
+        n_new = len(crafts) - (removed is not None) + (added is not None)
+        new_mse = mse_of(new_total)
+        new_e = energy(n_new, new_mse)
+
+        if new_e <= cur or rng.random() < np.exp(-(new_e - cur) / temp):
+            if removed is not None:
+                c = crafts[removed]
+                counts[FAM_OFF[c[0]] + c[1]] -= 1
+                crafts[removed] = crafts[-1]
+                crafts.pop()
+            if added is not None:
+                if counts[FAM_OFF[added[0]] + added[1]] >= MAXK:
+                    continue
+                crafts.append(added)
+                counts[FAM_OFF[added[0]] + added[1]] += 1
+            total, mse, cur = new_total, new_mse, new_e
+            if mse <= FEAS and len(crafts) < best_n:
+                best_n, best = len(crafts), [c[:3] for c in crafts]
+                print(f"  [{el:6.0f}s] rekord i ri: {best_n} anije, MSE={mse:.4f}")
+        if it % 20000 == 0:
+            print(f"  [{el:6.0f}s] it={it}  anije={len(crafts)}  MSE={mse:.4f}  T={temp:.3f}")
+    return best_n, best
+
+
+# ---------- ndertimi i vektorit x per UDP ----------
+def build_x(best):
+    """Kthen listen e anijeve ne formatin qe pret udp.fitness."""
+    phs = np.zeros(N * MAXK)
+    slot = np.zeros(N, dtype=int)
+    for fam, i, ph in best:
+        g = FAM_OFF[fam] + i
+        phs[g * MAXK + slot[g]] = ph
+        slot[g] += 1
+    return np.concatenate([slot.astype(float), phs])
+
+
 if __name__ == "__main__":
+    minutes = float(sys.argv[1]) if len(sys.argv) > 1 else 5.0
+    print("Hapi 1: greedy")
     crafts, counts, total = greedy()
-    print(f"Greedy perfundoi: {len(crafts)} anije, MSE={mse_of(total):.4f}")
+    print(f"Hapi 2: annealing per {minutes} min")
+    n, best = anneal(crafts, counts, total, minutes * 60)
+    if best is None:
+        print("Nuk u gjet zgjidhje e vlefshme. Provo me me shume kohe.")
+        sys.exit(1)
+    x = build_x(best)
+    np.save("best_x.npy", x)
+    obj, num_sel, mse = udp.fitness(x, postprocess=True)
+    print(f"Kontrolli final nga UDP: anije={num_sel}, MSE={mse:.4f}, obj={obj[0]:.1f}")
+    udp.plot_signal(x)
+    
