@@ -73,10 +73,30 @@ def new_craft(counts, total):
     return [fam, i, ph, craft_signal(fam, i, ph)]
 
 
-# ---------- prova e pjesës 1 ----------
-if __name__ == "__main__":
-    counts = np.zeros(N, dtype=int)
+# ---------- pjesa 2: greedy ----------
+def greedy(max_crafts=600, cands=300):
+    """Shton anije nje nga nje; ne cdo hap mban ate qe ul me shume gabimin."""
+    crafts, counts = [], np.zeros(N, dtype=int)
     total = np.zeros_like(TARGET)
-    c = new_craft(counts, total)
-    print("MSE pa asnje anije:", round(mse_of(total), 4))
-    print("MSE me nje anije:", round(mse_of(total + c[3]), 4))
+    mse = mse_of(total)
+    while mse > M_SAFE and len(crafts) < max_crafts:
+        best, best_mse = None, mse
+        for _ in range(cands):
+            c = new_craft(counts, total)
+            m = mse_of(total + c[3])
+            if m < best_mse:
+                best, best_mse = c, m
+        if best is None:
+            break
+        crafts.append(best)
+        counts[FAM_OFF[best[0]] + best[1]] += 1
+        total = total + best[3]
+        mse = best_mse
+        print(f"  greedy: {len(crafts)} anije, MSE={mse:.4f}")
+    return crafts, counts, total
+
+
+# ---------- prova e pjesës 2 ----------
+if __name__ == "__main__":
+    crafts, counts, total = greedy()
+    print(f"Greedy perfundoi: {len(crafts)} anije, MSE={mse_of(total):.4f}")
