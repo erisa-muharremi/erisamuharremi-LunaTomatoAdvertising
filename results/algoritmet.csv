@@ -1,0 +1,13 @@
+algoritem,seed,anije,mse,e_vlefshme
+greedy vetem,1,60,0.1114,jo
+random search (40 anije),1,40,0.3996,jo
+hill climbing,1,45,0.0487,po
+simulated annealing,1,40,0.048,po
+greedy vetem,2,64,0.1579,jo
+random search (40 anije),2,40,0.3963,jo
+hill climbing,2,49,0.0487,po
+simulated annealing,2,42,0.0487,po
+greedy vetem,3,61,0.0716,jo
+random search (40 anije),3,40,0.3978,jo
+hill climbing,3,49,0.0487,po
+simulated annealing,3,40,0.0487,po
